@@ -1,0 +1,19 @@
+﻿[
+  {
+      "first_name": "Savannah",
+      "last_name": "Rosario",
+    "numbers": [1],
+    "friends": [
+      {
+        "first_name": "Jack"
+      }
+    ]
+  },
+  {
+    "first_name": "Haynes",
+    "last_name": "Hanson",
+    "numbers": [ 3,5 ],
+    "friends": [
+    ]
+  }
+]
