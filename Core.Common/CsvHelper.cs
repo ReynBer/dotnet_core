@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Core.Common
 {
-	public static class CsvHelper
+    public static class CsvHelper
 	{
 		public static IEnumerable<string[]> ReadFrom(string file, string separator)
 		{
