@@ -11,7 +11,12 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core.Serialization.Tests", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core.Common", "Core.Common\Core.Common.csproj", "{485E15F1-9BB9-40D5-8958-B2389AC3DED1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Core.Common.Tests", "Core.Common.Tests\Core.Common.Tests.csproj", "{6ED5AC05-15FD-4464-BD0E-CC3F007F2576}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core.Common.Tests", "Core.Common.Tests\Core.Common.Tests.csproj", "{6ED5AC05-15FD-4464-BD0E-CC3F007F2576}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "WorkFlows", "WorkFlows", "{F85C915B-9606-436D-86F6-48EB9917C5F4}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\dotnetcore.yml = .github\workflows\dotnetcore.yml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
