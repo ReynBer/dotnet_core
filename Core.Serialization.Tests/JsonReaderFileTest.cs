@@ -16,7 +16,7 @@ namespace Core.Serialization.Tests
             };
             var reader = new JsonReaderFile<Person>(Person.Serializer);
             var personsRead = reader.ReadValues("input.json").ToList();
-            Assert.Equal(personsExpected, personsRead);
+            Assert.Equal(personsExpected, personsRead, new PersonComparer());
         }
     }
 }

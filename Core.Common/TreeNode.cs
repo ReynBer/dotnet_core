@@ -1,6 +1,8 @@
-﻿using Newtonsoft.Json;
+﻿using Core.Common.Extension;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Core.Common
@@ -16,45 +18,77 @@ namespace Core.Common
         [JsonIgnore]
         public TNode Parent { get => _parent as TNode; }
 
-        protected TreeNode(TreeNode<TNode> parent = null, IEnumerable<TreeNode<TNode>> children = null)
+        protected TreeNode([DisallowNull] IEnumerable<TreeNode<TNode>> children, TreeNode<TNode> parent = null, int position = -1)
         {
             _parent = parent;
-            parent?._children?.Add(this);
-            _children = children?.ToList() ?? new List<TreeNode<TNode>>();
+            if (parent != null)
+            {
+                if (position < 0)
+                    parent._children.Add(this);
+                else
+                    parent._children.Insert(position.Clamp(0, parent._children.Count), this);
+            }
+
+            _children = children.ToList();
             foreach (var child in _children)
                 child._parent = this;
         }
 
-        protected TNode DeleteBranch(Func<TNode, bool> predicate)
+        [JsonIgnore]
+        public int Position
+            => IsRoot ? -1 : _parent._children.IndexOf(this);
+
+        public TNode RemoveNode(bool isIncludingChildren = false)
         {
-            var childToDelete = Children.FirstOrDefault(predicate) as TreeNode<TNode>;
-            _children.Remove(childToDelete);
-            if (childToDelete != null)
-                childToDelete._parent = null;//To be GC
+            //Root should not be removed -> Exception
+            _parent._children.Remove(this);
+            if (!isIncludingChildren)
+            {
+                foreach (var child in _children)
+                    _parent.AddChild(child);
+                _children.Clear();
+            }
+            _parent = null;
             return this as TNode;
         }
 
-        public IEnumerable<TNode> TopDown(bool isDepthTraversal = true, TNode node = null)
+        public virtual TNode AddChild([DisallowNull] TreeNode<TNode> node, int position = -1)
         {
-            var currentNode = (node == null ? Root : node) as TreeNode<TNode>;
-            if (node == null)
-                yield return currentNode as TNode;
+            node._parent = this;
+            if (position < 0)
+                _children.Add(node);
+            else
+                _children.Insert(position.Clamp(0, _children.Count), node);
+            return this as TNode;
+        }
+
+        protected (TNode parent, TNode childDetached) RemoveBranch(Func<TNode, bool> predicate)
+        {
+            var childToDelete = Children.FirstOrDefault(predicate) as TreeNode<TNode>;
+            if (_children.Remove(childToDelete))
+                childToDelete._parent = null;
+            return (this as TNode, childToDelete as TNode);
+        }
+
+        public IEnumerable<TNode> TopDown(bool isDepthTraversal = true)
+        {
+            var currentNode = this;
+            yield return this as TNode;
             var queueOfNodes = new Queue<TreeNode<TNode>>();
             foreach (var child in currentNode._children)
             {
-                var childNode = child as TNode;
-                yield return childNode;
+                yield return child as TNode;
                 if (isDepthTraversal)
                 {
                     if (!child.IsLeaf)
-                        foreach (var n in TopDown(isDepthTraversal, childNode))
+                        foreach (var n in child.TopDown(isDepthTraversal).Skip(1))
                             yield return n;
                 }
                 else
                     queueOfNodes.Enqueue(child);
             }
             foreach (var child in queueOfNodes.Where(n => !n.IsLeaf))
-                foreach (var n in TopDown(isDepthTraversal, child as TNode))
+                foreach (var n in child.TopDown(isDepthTraversal).Skip(1))
                     yield return n;
         }
 
@@ -75,7 +109,7 @@ namespace Core.Common
 
         [JsonIgnore]
         public int MaxDepth
-            => TopDown().Cast<TreeNode<TNode>>().Where(n => n.IsLeaf).Max(n => n.Depth);
+            => (Root as TreeNode<TNode>).TopDown().Cast<TreeNode<TNode>>().Where(n => n.IsLeaf).Max(n => n.Depth);
 
         [JsonIgnore]
         public bool IsLeaf

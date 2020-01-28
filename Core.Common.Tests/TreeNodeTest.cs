@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using Core.Common.Extension;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Xunit;
 
@@ -10,17 +12,21 @@ namespace Core.Common.Tests
         {
             public int Id { get; set; }
 
-            public NestedTree(int id, NestedTree parent = null) : base(parent, null)
+            public NestedTree(int id) : base(Enumerable.Empty<NestedTree>(), null)
+            {
+                Id = id;
+            }
+            public NestedTree(int id, [DisallowNull] NestedTree parent) : base(Enumerable.Empty<NestedTree>(), parent)
             {
                 Id = id;
             }
 
-            public NestedTree DeleteBranch(int id)
-                => TopDown().FirstOrDefault(n => n.Id == id).Parent.DeleteBranch(c => c.Id == id);
+            public (NestedTree parent, NestedTree childDetached) RemoveBranch(int id)
+                => Root.TopDown().FirstOrDefault(n => n.Id == id).Parent.RemoveBranch(c => c.Id == id);
 
             public NestedTree Clone()
             {
-                var treeById = new[] { Root }.ToDictionary(k => k, v => new NestedTree(v.Id));
+                var treeById = new[] { this }.ToDictionary(k => k, v => new NestedTree(v.Id));
                 foreach (var node in TopDown().Skip(1))
                     treeById[node] = new NestedTree(node.Id, treeById[node.Parent]);
                 return treeById.First().Value.Root;
@@ -50,15 +56,47 @@ namespace Core.Common.Tests
             _size = i;
         }
 
-        [Fact]
-        public void CheckTopDownDepthTraversale()
+        [Theory]
+        [InlineData(new int[] { 0, 1, 2, 3, 4, 6 }, new int[] { 5, 7 }, true)]
+        [InlineData(new int[] { 0, 1, 2, 3, 4, 6, 7 }, new int[] { 5 }, false)]
+        public void CheckRemoveNode(int[] expected, int[] expectedRemoved, bool withChildren)
+        {
+            var nodeRemoved = _node0_2_5.RemoveNode(withChildren);
+            Assert.Equal(expected, _root.TopDown(false).Select(n => n.Id).ToArray());
+            Assert.Equal(expectedRemoved, nodeRemoved.TopDown(false).Select(n => n.Id).ToArray());
+        }
 
-            => Assert.Equal(new int[] { 0, 1, 3, 4, 2, 5, 7, 6 }, _root.TopDown().Select(n => n.Id).ToArray());
+        [Theory]
+        [InlineData(15, null)]
+        [InlineData(15, -1)]
+        [InlineData(15, 0)]
+        [InlineData(15, 2)]
+        [InlineData(15, 10000)]
+        public void CheckAddChild(int id, int? position)
+        {
+            var nodeAdded = new NestedTree(id);
+            var positionExpected = position.HasValue
+                    ? position.Value
+                    : -1;
+            int maxValue = _root.Children.Count();
+            if (positionExpected < 0)
+                positionExpected = maxValue;
+            positionExpected = positionExpected.Clamp(0, maxValue);
+            if (position.HasValue)
+                _root.AddChild(nodeAdded, position.Value);
+            else
+                _root.AddChild(nodeAdded);
+            Assert.Contains(_root.Children, n => n.Id == id);
+            Assert.Equal(_root, nodeAdded.Parent);
+            Assert.Equal(_root.Children.ElementAt(positionExpected), nodeAdded);
+        }
 
-        [Fact]
-        public void CheckTopDownHeightTraversale()
+        [Theory]
+        [InlineData(new int[] { 0, 1, 3, 4, 2, 5, 7, 6 }, true)]
+        [InlineData(new int[] { 0, 1, 2, 3, 4, 5, 6, 7 }, false)]
+        public void CheckTopDownDepthTraversale(int[] expected, bool isDepthTransversal)
 
-            => Assert.Equal(new int[] { 0, 1, 2, 3, 4, 5, 6, 7 }, _root.TopDown(false).Select(n => n.Id).ToArray());
+            => Assert.Equal(expected, _root.TopDown(isDepthTransversal).Select(n => n.Id).ToArray());
 
         [Fact]
         public void CheckMaxDepth()
@@ -112,11 +150,10 @@ namespace Core.Common.Tests
         }
 
         [Fact]
-        public void CheckDeleteBranch()
+        public void CheckRemoveBranch()
         {
-            var newTree = _root.Clone().DeleteBranch(2).Root;
+            var newTree = _root.Clone().RemoveBranch(2).parent.Root;
             Assert.Equal(new int[] { 0, 1, 3, 4 }, newTree.TopDown(false).Select(n => n.Id).ToArray());
         }
     }
-
 }

@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -12,38 +13,44 @@ namespace Core.Api.Models
         public int Id { get; set; }
         public string Name { get; set; }
 
-        public TreeModel(TreeModel parent, int id, string name) : base(parent, null)
+        public TreeModel(int id, string name, TreeModel parent, int position = -1) : base(Enumerable.Empty<TreeModel>(), parent, position)
         {
             Id = id;
             Name = name;
         }
 
         [JsonConstructor]
-        public TreeModel(int id, string name, IEnumerable<TreeModel> children = null) : base(null, children)
+        public TreeModel(int id, string name, [DisallowNull] IEnumerable<TreeModel> children) : base(children, null)
         {
             Id = id;
             Name = name;
         }
 
+        public TreeModel(int id, string name) : this(id, name, Enumerable.Empty<TreeModel>())
+        {
+        }
+
         public TreeModel Clone()
         {
-            var treeById = new[] { Root }.ToDictionary(k => k, v => new TreeModel(null, v.Id, v.Name));
-            foreach (var node in TopDown().Skip(1))
-                treeById[node] = new TreeModel(treeById[node.Parent], node.Id, node.Name);
+            var treeById = new[] { this }.ToDictionary(k => k, v => new TreeModel(v.Id, v.Name, (TreeModel)null));
+            foreach (var node in TopDown(true).Skip(1))
+                treeById[node] = new TreeModel(node.Id, node.Name, treeById[node.Parent]);
             return treeById.First().Value.Root;
         }
 
-        public TreeModel FindNode(int nodeId)
-            => TopDown().FirstOrDefault(n => n.Id == nodeId);
+        public TreeModel FindNode(int nodeId, bool fromRoot = true)
+            => nodeId <= 0 ? Root : (fromRoot ? Root : this).TopDown().FirstOrDefault(n => n.Id == nodeId);
 
-        public TreeModel AddNode(int? nodeIdParent, int id, string name)
-            => new TreeModel(
-                (nodeIdParent.HasValue
-                ? TopDown().First(n => n.Id == nodeIdParent.Value)
-                : null
-                ), id, name);
-
-        public TreeModel DeleteBranch(int treeId)
-            => FindNode(treeId).Parent.DeleteBranch(c => c.Id == treeId);
+        public (TreeModel parent, TreeModel childDetached) RemoveBranch(int treeId)
+        {
+            var nodeFound = FindNode(treeId);
+            return nodeFound == null
+                ? (null, null)
+                : (nodeFound.IsRoot
+                    ? (null, nodeFound)
+                    : nodeFound.Parent.RemoveBranch(c => c.Id == treeId)
+                );
+        }
     }
 }
+

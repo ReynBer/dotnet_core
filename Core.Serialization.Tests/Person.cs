@@ -1,6 +1,7 @@
 ﻿using Core.Common;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
@@ -11,38 +12,46 @@ namespace Core.Serialization.Tests
         public PersonSerializer() : base(Formatting.Indented) { }
     }
 
-    public class Person : IEquatable<Person>
+    public class PersonComparer : IEqualityComparer<Person>
+    {
+        private readonly ListComparer<int> numbersComparer = new ListComparer<int>();
+        private readonly ListComparer<Person> personsComparer;
+
+        public PersonComparer()
+        {
+            personsComparer = new ListComparer<Person>(Equals);
+        }
+
+        public bool Equals([AllowNull] Person x, [AllowNull] Person y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (ReferenceEquals(null, y) || ReferenceEquals(null, x)) return false;
+            return true
+                && string.Equals(x.LastName, y.LastName)
+                && string.Equals(x.FirstName, y.FirstName)
+                && numbersComparer.Equals(x.Numbers, y.Numbers)
+                && personsComparer.Equals(x.Friends, y.Friends);
+        }
+
+        public int GetHashCode([DisallowNull] Person p)
+        {
+            unchecked
+            {
+                int hash = 0;
+                hash = hash * 397 ^ (p.FirstName?.GetHashCode() ?? 0);
+                hash = hash * 397 ^ (p.LastName?.GetHashCode() ?? 0);
+                return hash;
+            }
+        }
+    }
+
+    public class Person 
     {
 
         public string FirstName { get; set; }
         public string LastName { get; set; }
         public int[] Numbers { get; set; }
         public Person[] Friends { get; set; }
-
-        public bool Equals(Person other)
-        {
-            if (other is null) return false;
-            if (ReferenceEquals(this, other)) return true;
-            return
-                FirstName == other.FirstName
-                && LastName == other.LastName
-                && new ListComparer<int>().Equals(Numbers, other.Numbers)
-                && new ListComparer<Person>().Equals(Friends, other.Friends);
-        }
-
-        public override bool Equals(object obj)
-            => Equals(obj as Person);
-
-        public override int GetHashCode()
-        {
-            unchecked
-            {
-                int hash = 0;
-                hash = hash * 397 ^ (FirstName != null ? FirstName.GetHashCode() : 0);
-                hash = hash * 397 ^ (LastName != null ? LastName.GetHashCode() : 0);
-                return hash;
-            }
-        }
 
         public static IStringSerializer<Person> Serializer { get => new PersonSerializer(); }
 

@@ -8,39 +8,81 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Core.Api.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
     public class TreeController : ControllerBase
     {
-        [HttpGet]
-        public async Task<TreeModel> GetTreeAsync([FromQuery]int treeId)
-            => await Task.FromResult(
-                CurrentModel.FindNode(treeId)
-            );
+        [HttpGet("api/tree/{nodeId}")]
+        public async Task<ActionResult<TreeModel>> GetTreeAsync(int nodeId)
+        {
+            var nodeFound = CurrentModel.FindNode(nodeId);
+            if (nodeFound == null)
+                return NotFound();
+            return Ok(await Task.FromResult(nodeFound));
+        }
 
-        [HttpPost]
-        public async Task<TreeModel> CreateThematicTreeAsync([FromQuery]int nodeIdParent, [FromBody] Node node)
+        [HttpPost("api/tree")]
+        public async Task<ActionResult<TreeModel>> CreateThematicTreeAsync([FromBody] NodeModel node)
         {
             //TEMPORARY, JUST TO CHECK THE ENDPOINT IN LIVE
-            if (nodeIdParent <= 0)
-                CurrentModel = new TreeModel(node.Id, node.Name, new[] { CurrentModel.Root });
+            bool isRootCreation = node == null;
+            if (!isRootCreation)
+            {
+                if (node.Name == null || node.WithChildren.HasValue || !node.ParentId.HasValue)
+                    return BadRequest(@"For the creation of a node, a name and a parentId are necessary
+and don't put the field withchildren in the payload, please.");
+            }
+
+            if (isRootCreation)
+                CurrentModel = new TreeModel(0, "root");
             else
-                CurrentModel = CurrentModel.AddNode(nodeIdParent, node.Id, node.Name).Root;
-            return await Task.FromResult(CurrentModel);
+            {
+                var nodeParentFound = CurrentModel.FindNode(node.ParentId.Value);
+                int position = node.Position.HasValue ? node.Position.Value : -1;
+                _ = new TreeModel(0, node.Name, nodeParentFound, position);
+            }
+            return Ok(await Task.FromResult(CurrentModel));
         }
 
-        [HttpPut]
-        public async Task<TreeModel> UpdateThematicTreeAsync([FromBody] Node node)
+        [HttpPut("api/tree/{nodeId}")]
+        public async Task<ActionResult<TreeModel>> UpdateThematicTreeAsync(int nodeId, [FromBody] NodeModel node)
         {
-            CurrentModel.FindNode(node.Id).Name = node.Name;
-            return await Task.FromResult(CurrentModel);
+            var nodeToMoveFound = CurrentModel.FindNode(nodeId);
+            if (nodeToMoveFound == null)
+                return NotFound();
+
+            if (nodeToMoveFound.IsRoot)
+                return BadRequest("The root node is not updatable.");
+
+            var nodeParentFound = CurrentModel.FindNode(node.ParentId.Value);
+            if (nodeParentFound == null)
+                return BadRequest("The parent node does not exist.");
+
+            if (node == null || !node.ParentId.HasValue)
+                return BadRequest("For the updating of a node and a parentId are necessary, please.");
+
+            int position = node.Position.HasValue ? node.Position.Value : -1;
+            if (nodeToMoveFound.Parent.Id != nodeParentFound.Id || position != nodeToMoveFound.Position)
+            {
+                nodeParentFound.AddChild(
+                    nodeToMoveFound.RemoveNode(node.WithChildren.HasValue && node.WithChildren.Value)
+                    , position
+                );
+            }
+
+            if (node.Name != null)
+                nodeToMoveFound.Name = node.Name;
+
+            return Ok(await Task.FromResult(CurrentModel));
         }
 
 
-        [HttpDelete]
-        public async Task<TreeModel> DeleteThematicTreeAsync([FromQuery]int treeId)
+        [HttpDelete("api/tree/{nodeId}")]
+        public async Task<ActionResult<TreeModel>> DeleteThematicTreeAsync(int nodeId)
         {
-            return await Task.FromResult(CurrentModel.DeleteBranch(treeId).Root);
+            var (newModel, childDetached) = CurrentModel.RemoveBranch(nodeId);
+            if (newModel == null && childDetached == null)
+                return NotFound();
+            CurrentModel = newModel;
+            return Ok(await Task.FromResult(CurrentModel));
         }
 
         //TEMPORARY, JUST TO CHECK THE ENDPOINT IN LIVE
@@ -55,11 +97,4 @@ namespace Core.Api.Controllers
                             , new TreeModel(4, "1.2")
                     });
     }
-
-    public class Node
-    {
-        public int Id { get; set; }
-        public string Name { get; set; }
-    }
-
 }

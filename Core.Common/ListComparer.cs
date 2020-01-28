@@ -1,45 +1,43 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Core.Common
 {
-    public class ListComparer<T> : IEqualityComparer<IEnumerable<T>>, IEqualityComparer<IEnumerable>
-        where T : IEquatable<T>
+    public class ListComparer<T> : IEqualityComparer<IEnumerable<T>>
     {
-        public bool Equals(IEnumerable x, IEnumerable y)
-            => Equals(x.Cast<T>(), y.Cast<T>());
+        private readonly Func<T, T, bool> _equalityFunc;
 
-        public bool Equals(IEnumerable<T> x, IEnumerable<T> y)
+        public ListComparer(Func<T, T, bool> equalityFunc)
         {
-            if (ReferenceEquals(x, y)) return true;
-            if (ReferenceEquals(null, x)) return false;
-            if (ReferenceEquals(null, y)) return false;
-            if (x.Count() != y.Count()) return false;
-
-            var enumeratorX = x.GetEnumerator();
-            var enumeratorY = y.GetEnumerator();
-            while (enumeratorX.MoveNext() && enumeratorY.MoveNext())
-            {
-                if (enumeratorX.Current == null || enumeratorY.Current == null)
-                {
-                    if (enumeratorX.Current == null && enumeratorX.Current == null)
-                        continue;
-                    return false;
-                }
-
-                if (!enumeratorX.Current.Equals(enumeratorY.Current))
-                    return false;
-            }
-            return true;
+            _equalityFunc = equalityFunc;
         }
 
-        public int GetHashCode(IEnumerable obj)
-            => GetHashCode(obj.Cast<T>());
+        public ListComparer(IEqualityComparer<T> comparer)
+        {
+            _equalityFunc = comparer.Equals;
+        }
 
-        public int GetHashCode(IEnumerable<T> values)
-            => HashCodeHelper.GetHashCode(values);
+        public ListComparer()
+        {
+            _equalityFunc = EqualityComparer<T>.Default.Equals;
+        }
+
+        public bool Equals([AllowNull] IEnumerable<T> x, [AllowNull] IEnumerable<T> y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (ReferenceEquals(null, y) || ReferenceEquals(null, x)) return false;
+            var xEnumerator = x.GetEnumerator();
+            var yEnumerator = y.GetEnumerator();
+            while (xEnumerator.MoveNext())
+            {
+                if (!yEnumerator.MoveNext() || !_equalityFunc(xEnumerator.Current, yEnumerator.Current))
+                    return false;
+            }
+            return !yEnumerator.MoveNext();
+        }
+
+        public int GetHashCode([DisallowNull] IEnumerable<T> obj)
+            => 0;
     }
 }
